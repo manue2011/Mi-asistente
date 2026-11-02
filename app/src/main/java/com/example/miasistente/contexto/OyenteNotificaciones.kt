@@ -38,6 +38,28 @@ class OyenteNotificaciones : NotificationListenerService() {
         fun tieneAcceso(context: Context): Boolean =
             NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
 
+        /**
+         * Chats pendientes que se pueden contestar desde su notificación (WhatsApp,
+         * Telegram, SMS…), del más reciente al más antiguo.
+         */
+        fun chatsRespondibles(context: Context): List<ChatRespondible> {
+            val servicio = instancia ?: return emptyList()
+            return runCatching { servicio.activeNotifications }.getOrNull().orEmpty()
+                .filter { it.packageName != context.packageName }
+                .sortedByDescending { it.postTime }
+                .mapNotNull { sbn ->
+                    val n = sbn.notification
+                    val accion = n.actions?.firstOrNull { a ->
+                        a.remoteInputs?.any { it.allowFreeFormInput } == true
+                    } ?: return@mapNotNull null
+                    val chat = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)
+                    val nombre = (chat?.conversationTitle ?: n.extras.getCharSequence(Notification.EXTRA_TITLE))
+                        ?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    ChatRespondible(nombreApp(context, sbn.packageName), nombre, accion)
+                }
+                .distinctBy { it.app to it.nombre }
+        }
+
         /** Devuelve las notificaciones pendientes como texto listo para el modelo. */
         fun describir(context: Context): String {
             if (!tieneAcceso(context)) return "Notificaciones: no tengo acceso a las notificaciones."

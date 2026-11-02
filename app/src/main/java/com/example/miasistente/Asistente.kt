@@ -11,6 +11,8 @@ import com.example.miasistente.cerebro.CerebroLocal
 import com.example.miasistente.cerebro.EstadoCerebro
 import com.example.miasistente.cerebro.Rol
 import com.example.miasistente.cerebro.Turno
+import com.example.miasistente.acciones.GestorAcciones
+import com.example.miasistente.acciones.RespuestaAccion
 import com.example.miasistente.contexto.GestorContexto
 import com.example.miasistente.contexto.LectorCalendario
 import com.example.miasistente.contexto.OyenteNotificaciones
@@ -76,6 +78,7 @@ class Asistente(private val app: Application) {
     private val cerebro: Cerebro = CerebroLocal(app, archivoModelo)
     private val locutor: Locutor = LocutorTts(app)
     private val contexto = GestorContexto(app)
+    private val acciones = GestorAcciones(app)
     private val resumenMatutino = ResumenMatutino(app)
 
     private val _ajustes = MutableStateFlow(EstadoAjustes())
@@ -92,6 +95,9 @@ class Asistente(private val app: Application) {
 
     /** Resumen pedido antes de que el modelo terminara de cargar. */
     private var resumenPendiente = false
+
+    /** Tras una pregunta de confirmación, se vuelve a escuchar en cuanto termine de hablar. */
+    private var escucharAlTerminar = false
 
     init {
         val vozDisponible = oyente.disponible
@@ -155,6 +161,10 @@ class Asistente(private val app: Application) {
                 !hablando && !generando && it.fase == Fase.HABLANDO -> it.copy(fase = Fase.INACTIVO)
                 else -> it
             }
+        }
+        if (!hablando && !generando && escucharAlTerminar) {
+            escucharAlTerminar = false
+            if (_ui.value.fase == Fase.INACTIVO) escuchar()
         }
     }
 
@@ -222,6 +232,11 @@ class Asistente(private val app: Application) {
      * muestra en la burbuja del usuario.
      */
     fun procesar(texto: String, visible: String = texto) {
+        // Las acciones (responder mensajes…) se resuelven sin el modelo.
+        acciones.atender(texto)?.let {
+            responderDirecto(visible, it)
+            return
+        }
         if (_ui.value.cerebro !is EstadoCerebro.Listo) {
             avisar("El modelo aún no está listo.")
             return
@@ -276,6 +291,23 @@ class Asistente(private val app: Application) {
                 }
             }
         }
+    }
+
+    /** Contesta sin pasar por el modelo (resultado de una acción). */
+    private fun responderDirecto(visible: String, respuesta: RespuestaAccion) {
+        _ui.update {
+            it.copy(
+                fase = Fase.PENSANDO,
+                aviso = null,
+                mensajes = it.mensajes +
+                    MensajeChat(siguienteId++, Rol.USUARIO, visible) +
+                    MensajeChat(siguienteId++, Rol.ASISTENTE, respuesta.texto),
+            )
+        }
+        historial += Turno(Rol.USUARIO, visible)
+        historial += Turno(Rol.ASISTENTE, respuesta.texto)
+        escucharAlTerminar = respuesta.escucharDespues
+        locutor.decir(respuesta.texto)
     }
 
     private fun interrumpir() {
