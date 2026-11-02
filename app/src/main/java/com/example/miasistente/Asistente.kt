@@ -128,6 +128,13 @@ class Asistente(private val app: Application) {
         refrescarAjustes()
     }
 
+    /** Con el modo reloj, la voz sale por el altavoz del reloj (manos libres) si está conectado. */
+    var vozPorReloj: Boolean
+        get() = locutor.usarManosLibres
+        set(valor) {
+            locutor.usarManosLibres = valor
+        }
+
     fun activarModoReloj(activo: Boolean) {
         if (activo) ServicioReloj.iniciar(app) else ServicioReloj.detener(app)
         refrescarAjustes()

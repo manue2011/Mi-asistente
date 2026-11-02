@@ -15,6 +15,9 @@ interface Locutor {
     /** Mensaje de error de inicialización, si lo hay. */
     val error: StateFlow<String?>
 
+    /** Si es true, habla por el manos libres Bluetooth conectado (p. ej. el reloj) en vez del altavoz. */
+    var usarManosLibres: Boolean
+
     /** Añade una frase a la cola de lectura. */
     fun decir(texto: String)
 
