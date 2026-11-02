@@ -5,8 +5,6 @@ import android.app.Application
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
 import com.example.miasistente.cerebro.ArchivoModelo
 import com.example.miasistente.cerebro.Cerebro
 import com.example.miasistente.cerebro.CerebroLocal
@@ -24,7 +22,10 @@ import com.example.miasistente.voz.EventoVoz
 import com.example.miasistente.voz.OyenteVoz
 import com.example.miasistente.voz.ReconocedorOnDevice
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,7 +64,10 @@ data class EstadoAjustes(
  * disparador externo (reloj Huawei, notificación, resumen matutino…) puede
  * reutilizarlo, o usar [procesar] para enviar texto directamente.
  */
-class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
+class Asistente(private val app: Application) {
+
+    /** Vive mientras viva el proceso: lo comparten la pantalla y el servicio del reloj. */
+    private val alcance = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val oyente: OyenteVoz = ReconocedorOnDevice(app)
     private val archivoModelo = ArchivoModelo(app)
@@ -95,15 +99,14 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
                 aviso = if (vozDisponible) null else ReconocedorOnDevice.MENSAJE_NO_DISPONIBLE,
             )
         }
-        viewModelScope.launch { cerebro.estado.collect(::alCambiarCerebro) }
-        viewModelScope.launch { locutor.hablando.collect(::alCambiarHabla) }
-        viewModelScope.launch { locutor.error.collect { e -> if (e != null) avisar(e) } }
+        alcance.launch { cerebro.estado.collect(::alCambiarCerebro) }
+        alcance.launch { locutor.hablando.collect(::alCambiarHabla) }
+        alcance.launch { locutor.error.collect { e -> if (e != null) avisar(e) } }
         cargarModelo()
     }
 
     /** Relee permisos y preferencias (al volver de los Ajustes del sistema, por ejemplo). */
     fun refrescarAjustes() {
-        val app = getApplication<Application>()
         _ajustes.value = EstadoAjustes(
             accesoNotificaciones = OyenteNotificaciones.tieneAcceso(app),
             permisoCalendario = LectorCalendario(app).tienePermiso,
@@ -123,7 +126,7 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun cargarModelo() {
-        viewModelScope.launch { cerebro.preparar() }
+        alcance.launch { cerebro.preparar() }
     }
 
     private fun alCambiarCerebro(estado: EstadoCerebro) {
@@ -162,7 +165,7 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
             avisar(ReconocedorOnDevice.MENSAJE_NO_DISPONIBLE)
             return
         }
-        if (ContextCompat.checkSelfPermission(getApplication(), Manifest.permission.RECORD_AUDIO) !=
+        if (ContextCompat.checkSelfPermission(app, Manifest.permission.RECORD_AUDIO) !=
             PackageManager.PERMISSION_GRANTED
         ) {
             avisar("Necesito permiso para usar el micrófono.")
@@ -228,7 +231,7 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
 
         val previos = historial.toList()
         generando = true
-        trabajoRespuesta = viewModelScope.launch {
+        trabajoRespuesta = alcance.launch {
             val respuesta = StringBuilder()
             val porDecir = StringBuilder()
             try {
@@ -280,12 +283,12 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
         oyente.cancelar()
         historial.clear()
         _ui.update { it.copy(mensajes = emptyList(), transcripcionParcial = "", aviso = null) }
-        viewModelScope.launch { cerebro.olvidar() }
+        alcance.launch { cerebro.olvidar() }
     }
 
     /** Copia un modelo elegido por el usuario y lo carga. */
     fun importarModelo(uri: Uri) {
-        viewModelScope.launch {
+        alcance.launch {
             _ui.update { it.copy(importando = 0f, aviso = null) }
             try {
                 archivoModelo.importar(uri) { p -> _ui.update { it.copy(importando = p) } }
@@ -308,7 +311,7 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
         estado.copy(mensajes = estado.mensajes.map { if (it.id == id) it.copy(texto = texto) else it })
     }
 
-    override fun onCleared() {
+    fun liberar() {
         trabajoRespuesta?.cancel()
         oyente.liberar()
         locutor.liberar()

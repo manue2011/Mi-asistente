@@ -10,7 +10,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,7 +24,7 @@ import com.example.miasistente.ui.TemaAsistente
 
 class MainActivity : ComponentActivity() {
 
-    private val viewModel: AsistenteViewModel by viewModels()
+    private val viewModel: Asistente by lazy { (application as MiAsistenteApp).asistente }
 
     private val pedirMicrofono = registerForActivityResult(ActivityResultContracts.RequestPermission()) { concedido ->
         if (concedido) viewModel.alternar()
