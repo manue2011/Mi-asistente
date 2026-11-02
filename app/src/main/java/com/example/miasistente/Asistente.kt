@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.content.Context
 import android.net.Uri
 import android.provider.Settings
+import android.util.Log
 import androidx.core.content.edit
 import androidx.core.content.ContextCompat
 import com.example.miasistente.cerebro.ArchivoModelo
@@ -159,7 +160,10 @@ class Asistente(private val app: Application) {
      * reloj), pregunta si quieres responder y escucha: basta con decir "respóndele que…".
      */
     private fun anunciarMensaje(texto: String) {
-        if (_ui.value.fase != Fase.INACTIVO) return
+        if (_ui.value.fase != Fase.INACTIVO) {
+            Log.d("Asistente", "Mensaje no leído: el asistente está en ${_ui.value.fase}")
+            return
+        }
         val puedeEscuchar = pantallaVisible || ServicioReloj.activo(app)
         val aviso = if (puedeEscuchar) "$texto ¿Quieres responder?" else texto
         _ui.update {
