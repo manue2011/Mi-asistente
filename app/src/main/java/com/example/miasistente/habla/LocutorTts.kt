@@ -1,7 +1,6 @@
 package com.example.miasistente.habla
 
 import android.content.Context
-import android.media.AudioAttributes
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
@@ -24,9 +23,6 @@ class LocutorTts(context: Context, private val idioma: Locale = Locale.forLangua
     private val siguienteId = AtomicLong(0)
     private var listo = false
     private val colaPrevia = mutableListOf<String>()
-    private val manosLibres = SalidaManosLibres(context)
-
-    override var usarManosLibres = false
 
     private val tts: TextToSpeech = TextToSpeech(context.applicationContext) { estado ->
         if (estado == TextToSpeech.SUCCESS) configurar() else _error.value = "No se pudo iniciar la síntesis de voz."
@@ -70,7 +66,6 @@ class LocutorTts(context: Context, private val idioma: Locale = Locale.forLangua
     private fun terminada() {
         if (pendientes.decrementAndGet() <= 0) {
             pendientes.set(0)
-            manosLibres.cerrar()
             _hablando.value = false
         }
     }
@@ -84,7 +79,7 @@ class LocutorTts(context: Context, private val idioma: Locale = Locale.forLangua
     }
 
     private fun encolar(texto: String) {
-        if (pendientes.getAndIncrement() == 0) prepararSalida()
+        pendientes.incrementAndGet()
         _hablando.value = true
         val id = "frase-${siguienteId.incrementAndGet()}"
         if (tts.speak(texto, TextToSpeech.QUEUE_ADD, null, id) != TextToSpeech.SUCCESS) terminada()
@@ -94,27 +89,7 @@ class LocutorTts(context: Context, private val idioma: Locale = Locale.forLangua
         synchronized(colaPrevia) { colaPrevia.clear() }
         tts.stop()
         pendientes.set(0)
-        manosLibres.cerrar()
         _hablando.value = false
-    }
-
-    /**
-     * Al empezar a hablar elige la salida: el manos libres (reloj) si está activado
-     * y conectado, o el altavoz normal del móvil.
-     */
-    private fun prepararSalida() {
-        val porReloj = usarManosLibres && manosLibres.abrir()
-        tts.setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(if (porReloj) AudioAttributes.USAGE_VOICE_COMMUNICATION else AudioAttributes.USAGE_ASSISTANT)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .build(),
-        )
-        if (porReloj) {
-            // El enlace Bluetooth tarda un momento en abrirse: un silencio evita que se corten las primeras palabras.
-            pendientes.incrementAndGet()
-            tts.playSilentUtterance(RETARDO_MANOS_LIBRES_MS, TextToSpeech.QUEUE_ADD, "silencio-${siguienteId.incrementAndGet()}")
-        }
     }
 
     override fun liberar() {
@@ -123,7 +98,6 @@ class LocutorTts(context: Context, private val idioma: Locale = Locale.forLangua
     }
 
     companion object {
-        private const val RETARDO_MANOS_LIBRES_MS = 900L
         private val markdown = Regex("""[*_#`>~|]+""")
         private val emojis = Regex("""[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{FE0F}\x{200D}]""")
         private val espacios = Regex("""\s+""")

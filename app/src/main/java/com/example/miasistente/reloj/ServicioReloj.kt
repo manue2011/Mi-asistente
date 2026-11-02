@@ -54,7 +54,6 @@ class ServicioReloj : Service() {
             })
             isActive = true
         }
-        asistente.vozPorReloj = true
 
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CANAL, "Modo reloj", NotificationManager.IMPORTANCE_LOW),
@@ -131,7 +130,6 @@ class ServicioReloj : Service() {
     }
 
     override fun onDestroy() {
-        asistente.vozPorReloj = false
         alcance.cancel()
         sesion.isActive = false
         sesion.release()

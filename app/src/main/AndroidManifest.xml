@@ -13,8 +13,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <!-- Para enviar la voz al altavoz del reloj por el canal de manos libres Bluetooth. -->
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
     <!-- Privacidad: se elimina cualquier permiso de red que añada una librería.
          Cuando añadas el modo híbrido con Ollama, quita esta línea y declara INTERNET. -->
