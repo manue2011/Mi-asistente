@@ -54,6 +54,7 @@ fun PantallaAsistente(
     alElegirModelo: () -> Unit,
     alReintentarCarga: () -> Unit,
     alDescartarAviso: () -> Unit,
+    alAbrirAjustes: () -> Unit,
 ) {
     Box(
         Modifier
@@ -66,7 +67,7 @@ fun PantallaAsistente(
                 .systemBarsPadding()
                 .padding(horizontal = 16.dp),
         ) {
-            Cabecera(estado, alNuevaConversacion)
+            Cabecera(estado, alNuevaConversacion, alAbrirAjustes)
 
             Conversacion(
                 mensajes = estado.mensajes,
@@ -128,7 +129,7 @@ private fun textoEstado(estado: EstadoUi): String = when (estado.fase) {
 }
 
 @Composable
-private fun Cabecera(estado: EstadoUi, alNuevaConversacion: () -> Unit) {
+private fun Cabecera(estado: EstadoUi, alNuevaConversacion: () -> Unit, alAbrirAjustes: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -143,6 +144,7 @@ private fun Cabecera(estado: EstadoUi, alNuevaConversacion: () -> Unit) {
         if (estado.mensajes.isNotEmpty()) {
             TextButton(onClick = alNuevaConversacion) { Text("Nueva", color = Acento) }
         }
+        TextButton(onClick = alAbrirAjustes) { Text("Ajustes", color = Acento) }
     }
 }
 

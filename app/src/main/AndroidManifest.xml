@@ -2,8 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Único permiso que pide la app. -->
+    <!-- Micrófono: imprescindible. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Opcionales; se piden solo al activar cada función en Ajustes. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Para volver a programar el resumen matutino tras reiniciar el móvil. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Privacidad: se elimina cualquier permiso de red que añada una librería.
          Cuando añadas el modo híbrido con Ollama, quita esta línea y declara INTERNET. -->
@@ -21,6 +26,11 @@
         </intent>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <!-- Para mostrar el nombre de la app que envía cada notificación. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
 
@@ -46,6 +56,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -53,6 +64,30 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Lectura de notificaciones (el usuario lo activa en Ajustes del sistema). -->
+        <service
+            android:name=".contexto.OyenteNotificaciones"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Resumen matutino. -->
+        <receiver
+            android:name=".rutina.ReceptorResumen"
+            android:exported="false" />
+        <receiver
+            android:name=".rutina.ReceptorArranque"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

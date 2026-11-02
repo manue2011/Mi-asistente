@@ -13,6 +13,11 @@ import com.example.miasistente.cerebro.CerebroLocal
 import com.example.miasistente.cerebro.EstadoCerebro
 import com.example.miasistente.cerebro.Rol
 import com.example.miasistente.cerebro.Turno
+import com.example.miasistente.contexto.GestorContexto
+import com.example.miasistente.contexto.LectorCalendario
+import com.example.miasistente.contexto.OyenteNotificaciones
+import com.example.miasistente.rutina.ResumenMatutino
+import java.time.LocalTime
 import com.example.miasistente.habla.Locutor
 import com.example.miasistente.habla.LocutorTts
 import com.example.miasistente.voz.EventoVoz
@@ -43,6 +48,14 @@ data class EstadoUi(
     val importando: Float? = null,
 )
 
+/** Estado de las funciones opcionales (pantalla de ajustes). */
+data class EstadoAjustes(
+    val accesoNotificaciones: Boolean = false,
+    val permisoCalendario: Boolean = false,
+    val resumenActivo: Boolean = false,
+    val horaResumen: LocalTime = LocalTime.of(8, 0),
+)
+
 /**
  * Orquesta los tres módulos: voz (oír) → cerebro (pensar) → habla (responder).
  *
@@ -56,6 +69,11 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
     private val archivoModelo = ArchivoModelo(app)
     private val cerebro: Cerebro = CerebroLocal(app, archivoModelo)
     private val locutor: Locutor = LocutorTts(app)
+    private val contexto = GestorContexto(app)
+    private val resumenMatutino = ResumenMatutino(app)
+
+    private val _ajustes = MutableStateFlow(EstadoAjustes())
+    val ajustes: StateFlow<EstadoAjustes> = _ajustes.asStateFlow()
 
     private val _ui = MutableStateFlow(EstadoUi())
     val ui: StateFlow<EstadoUi> = _ui.asStateFlow()
@@ -65,6 +83,9 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
     private var siguienteId = 0L
     private var trabajoRespuesta: Job? = null
     private var generando = false
+
+    /** Resumen pedido antes de que el modelo terminara de cargar. */
+    private var resumenPendiente = false
 
     init {
         val vozDisponible = oyente.disponible
@@ -80,6 +101,27 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
         cargarModelo()
     }
 
+    /** Relee permisos y preferencias (al volver de los Ajustes del sistema, por ejemplo). */
+    fun refrescarAjustes() {
+        val app = getApplication<Application>()
+        _ajustes.value = EstadoAjustes(
+            accesoNotificaciones = OyenteNotificaciones.tieneAcceso(app),
+            permisoCalendario = LectorCalendario(app).tienePermiso,
+            resumenActivo = resumenMatutino.activo,
+            horaResumen = resumenMatutino.hora,
+        )
+    }
+
+    fun activarResumen(activo: Boolean) {
+        resumenMatutino.activo = activo
+        refrescarAjustes()
+    }
+
+    fun cambiarHoraResumen(hora: LocalTime) {
+        resumenMatutino.hora = hora
+        refrescarAjustes()
+    }
+
     fun cargarModelo() {
         viewModelScope.launch { cerebro.preparar() }
     }
@@ -92,6 +134,7 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
             }
             it.copy(cerebro = estado, fase = fase)
         }
+        if (estado is EstadoCerebro.Listo && resumenPendiente) pedirResumen()
     }
 
     private fun alCambiarHabla(hablando: Boolean) {
@@ -144,8 +187,30 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Envía [texto] al cerebro y lee la respuesta en voz alta según se genera. */
-    fun procesar(texto: String) {
+    /** Pide el resumen matutino; si el modelo aún carga, se hará en cuanto esté listo. */
+    fun pedirResumen() {
+        if (_ui.value.cerebro !is EstadoCerebro.Listo) {
+            resumenPendiente = true
+            return
+        }
+        resumenPendiente = false
+        when (_ui.value.fase) {
+            Fase.ESCUCHANDO -> {
+                oyente.cancelar()
+                _ui.update { it.copy(fase = Fase.INACTIVO, transcripcionParcial = "", nivelVoz = 0f) }
+            }
+            Fase.PENSANDO, Fase.HABLANDO -> interrumpir()
+            Fase.CARGANDO, Fase.INACTIVO -> Unit
+        }
+        procesar(GestorContexto.PETICION_RESUMEN, visible = "☀️ Resumen del día")
+    }
+
+    /**
+     * Envía [texto] al cerebro (con la información del móvil que haga falta)
+     * y lee la respuesta en voz alta según se genera. [visible] es lo que se
+     * muestra en la burbuja del usuario.
+     */
+    fun procesar(texto: String, visible: String = texto) {
         if (_ui.value.cerebro !is EstadoCerebro.Listo) {
             avisar("El modelo aún no está listo.")
             return
@@ -156,7 +221,7 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
                 fase = Fase.PENSANDO,
                 aviso = null,
                 mensajes = it.mensajes +
-                    MensajeChat(siguienteId++, Rol.USUARIO, texto) +
+                    MensajeChat(siguienteId++, Rol.USUARIO, visible) +
                     MensajeChat(siguienteId++, Rol.ASISTENTE, ""),
             )
         }
@@ -167,7 +232,9 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
             val respuesta = StringBuilder()
             val porDecir = StringBuilder()
             try {
-                cerebro.responder(previos, texto).collect { trozo ->
+                // El historial guarda el mensaje enriquecido para no perder el contexto en preguntas de seguimiento.
+                val mensaje = contexto.enriquecer(texto)
+                cerebro.responder(previos, mensaje).collect { trozo ->
                     respuesta.append(trozo)
                     porDecir.append(trozo)
                     actualizarMensaje(idRespuesta, respuesta.toString())
@@ -176,7 +243,7 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 locutor.decir(porDecir.toString())
                 val final = respuesta.toString().trim()
-                historial += Turno(Rol.USUARIO, texto)
+                historial += Turno(Rol.USUARIO, mensaje)
                 historial += Turno(Rol.ASISTENTE, final)
                 if (final.isEmpty()) actualizarMensaje(idRespuesta, "…")
             } catch (e: CancellationException) {
@@ -185,12 +252,15 @@ class AsistenteViewModel(app: Application) : AndroidViewModel(app) {
                 actualizarMensaje(idRespuesta, respuesta.toString().ifEmpty { "(sin respuesta)" })
                 avisar("Error al generar la respuesta: ${e.message ?: e.javaClass.simpleName}")
             } finally {
-                generando = false
-                _ui.update {
-                    if (!locutor.hablando.value && it.fase in setOf(Fase.PENSANDO, Fase.HABLANDO)) {
-                        it.copy(fase = Fase.INACTIVO)
-                    } else {
-                        it
+                // Si se interrumpió y ya hay otra respuesta en marcha, no hay que tocar su estado.
+                if (trabajoRespuesta == coroutineContext[Job]) {
+                    generando = false
+                    _ui.update {
+                        if (!locutor.hablando.value && it.fase in setOf(Fase.PENSANDO, Fase.HABLANDO)) {
+                            it.copy(fase = Fase.INACTIVO)
+                        } else {
+                            it
+                        }
                     }
                 }
             }
