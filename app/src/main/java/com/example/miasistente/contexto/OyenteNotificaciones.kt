@@ -4,6 +4,8 @@ import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
 import android.service.notification.NotificationListenerService
+import android.service.notification.StatusBarNotification
+import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
 /**
@@ -54,27 +56,59 @@ class OyenteNotificaciones : NotificationListenerService() {
                 }
                 .sortedByDescending { it.postTime }
                 .take(MAX_NOTIFICACIONES)
-                .mapNotNull { sbn ->
-                    val extras = sbn.notification.extras
-                    val titulo = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
-                    val texto = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
-                        ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
-                    if (titulo.isBlank() && texto.isBlank()) return@mapNotNull null
-                    val app = nombreApp(context, sbn.packageName)
-                    "- $app · $titulo: ${texto.replace('\n', ' ').take(MAX_CARACTERES)}"
-                }
+                .mapNotNull { sbn -> describirUna(context, sbn) }
 
             return if (pendientes.isEmpty()) {
                 "Notificaciones: no hay notificaciones pendientes."
             } else {
-                "Notificaciones pendientes (${pendientes.size}):\n" + pendientes.joinToString("\n")
+                "Notificaciones pendientes (${pendientes.size}):\n" + pendientes.joinToString("\n") +
+                    "\nAl hablar de cada notificación di siempre de qué app es y quién la envía, y lee el " +
+                    "mensaje tal cual, por ejemplo: «Tienes un mensaje de WhatsApp de Ana que dice: …»."
             }
         }
 
+        /** Una línea por notificación: app, remitente (y grupo) y el texto literal. */
+        private fun describirUna(context: Context, sbn: StatusBarNotification): String? {
+            val app = nombreApp(context, sbn.packageName)
+
+            // Apps de mensajería (WhatsApp, Telegram, SMS…): remitente de cada mensaje.
+            val chat = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(sbn.notification)
+            if (chat != null && chat.messages.isNotEmpty()) {
+                val grupo = chat.conversationTitle?.takeIf { chat.isGroupConversation }?.let { " en el grupo «$it»" }.orEmpty()
+                return chat.messages.takeLast(MAX_MENSAJES_POR_CHAT).joinToString("\n") { m ->
+                    val quien = m.person?.name ?: chat.user.name ?: "alguien"
+                    "- Mensaje de $app$grupo de $quien: «${limpiar(m.text)}»"
+                }
+            }
+
+            val extras = sbn.notification.extras
+            val titulo = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+            val texto = extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT)
+            if (titulo.isBlank() && texto.isNullOrBlank()) return null
+            return "- Notificación de $app, «$titulo»: «${limpiar(texto)}»"
+        }
+
+        private fun limpiar(texto: CharSequence?): String =
+            texto?.toString().orEmpty().replace('\n', ' ').take(MAX_CARACTERES)
+
         private fun nombreApp(context: Context, paquete: String): String =
-            runCatching {
+            NOMBRES_CONOCIDOS[paquete] ?: runCatching {
                 val pm = context.packageManager
                 pm.getApplicationLabel(pm.getApplicationInfo(paquete, 0)).toString()
             }.getOrElse { paquete.substringAfterLast('.') }
+
+        private const val MAX_MENSAJES_POR_CHAT = 3
+
+        /** Nombres tal como se pronuncian, para las apps más habituales. */
+        private val NOMBRES_CONOCIDOS = mapOf(
+            "com.whatsapp" to "WhatsApp",
+            "com.whatsapp.w4b" to "WhatsApp Business",
+            "org.telegram.messenger" to "Telegram",
+            "com.google.android.gm" to "Gmail",
+            "com.samsung.android.messaging" to "Mensajes",
+            "com.google.android.apps.messaging" to "Mensajes",
+            "com.instagram.android" to "Instagram",
+            "com.facebook.orca" to "Messenger",
+        )
     }
 }
