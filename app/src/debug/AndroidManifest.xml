@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solo en la versión debug: permite enviar órdenes de texto por adb para probar sin hablar. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Protegido con DUMP: solo adb (shell) y el sistema pueden enviarle órdenes. -->
+        <receiver
+            android:name=".ReceptorPruebas"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="com.example.miasistente.PRUEBA" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

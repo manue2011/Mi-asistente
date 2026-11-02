@@ -64,7 +64,6 @@ class AccionesTelefono(private val context: Context) {
 
     fun buscarContacto(nombre: String): Contacto? {
         if (!tiene(Manifest.permission.READ_CONTACTS)) return null
-        val buscado = normalizar(nombre).trim()
         val candidatos = mutableListOf<Contacto>()
         context.contentResolver.query(
             ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
@@ -81,22 +80,16 @@ class AccionesTelefono(private val context: Context) {
                 candidatos += Contacto(n, numero)
             }
         }
-        // Exacto, luego empieza por, luego contiene.
-        return candidatos.firstOrNull { normalizar(it.nombre) == buscado }
-            ?: candidatos.firstOrNull { normalizar(it.nombre).startsWith(buscado) }
-            ?: candidatos.firstOrNull { normalizar(it.nombre).contains(buscado) }
+        return BuscadorNombres.mejor(candidatos, nombre) { it.nombre }
     }
 
     fun buscarApp(nombre: String): App? {
-        val buscado = normalizar(nombre).trim()
         val pm = context.packageManager
         val apps = pm.queryIntentActivities(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0,
         ).map { App(it.loadLabel(pm).toString(), it.activityInfo.packageName) }
             .filter { it.paquete != context.packageName }
-        return apps.firstOrNull { normalizar(it.nombre) == buscado }
-            ?: apps.firstOrNull { normalizar(it.nombre).startsWith(buscado) }
-            ?: apps.firstOrNull { normalizar(it.nombre).contains(buscado) }
+        return BuscadorNombres.mejor(apps, nombre) { it.nombre }
     }
 
     fun abrirApp(app: App): Boolean {

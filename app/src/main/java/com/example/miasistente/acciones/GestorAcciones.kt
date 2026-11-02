@@ -80,7 +80,7 @@ class GestorAcciones(private val context: Context) {
                 if (destinatario.isEmpty() || destinatario in ULTIMO) {
                     "No veo ningún mensaje pendiente al que pueda responder."
                 } else {
-                    "No veo ningún mensaje pendiente de $destinatario. Solo puedo contestar mensajes que sigan en la barra de notificaciones."
+                    "No veo ningún mensaje pendiente de ${capitalizar(destinatario)}. Solo puedo contestar mensajes que sigan en la barra de notificaciones."
                 },
             )
         return confirmar("¿Envío a ${chat.nombre} por ${chat.app}: «$mensaje»?", "Vale, no lo envío.") {
@@ -91,12 +91,7 @@ class GestorAcciones(private val context: Context) {
     private fun elegirChat(chats: List<ChatRespondible>, destinatario: String): ChatRespondible? {
         if (chats.isEmpty()) return null
         if (destinatario.isEmpty() || destinatario in ULTIMO) return chats.first()
-        val buscado = normalizar(destinatario)
-        val palabras = buscado.split(' ').filter { it.length > 2 }
-        // Primero coincidencia exacta, luego por contenido, luego por alguna palabra del nombre.
-        return chats.firstOrNull { normalizar(it.nombre) == buscado }
-            ?: chats.firstOrNull { normalizar(it.nombre).contains(buscado) }
-            ?: chats.firstOrNull { c -> palabras.any { normalizar(c.nombre).contains(it) } }
+        return BuscadorNombres.mejor(chats, destinatario) { it.nombre }
     }
 
     // --- Reloj: temporizador y alarma ------------------------------------------------------
@@ -144,7 +139,7 @@ class GestorAcciones(private val context: Context) {
             if (!telefono.tiene(Manifest.permission.READ_CONTACTS)) {
                 return RespuestaAccion("Para llamar a tus contactos necesito permiso de contactos. Actívalo en Ajustes.")
             }
-            val contacto = telefono.buscarContacto(quien) ?: return RespuestaAccion("No encuentro a $quien en tus contactos.")
+            val contacto = telefono.buscarContacto(quien) ?: return RespuestaAccion("No encuentro a ${capitalizar(quien)} en tus contactos.")
             contacto.nombre to contacto.numero
         }
         return confirmar("¿Llamo a $nombre?", "Vale, no llamo.") {
@@ -157,7 +152,7 @@ class GestorAcciones(private val context: Context) {
     private fun abrirApp(t: String, appVisible: Boolean): RespuestaAccion? {
         val orden = ORDEN_ABRIR.find(t) ?: return null
         val nombre = orden.groupValues[1].trim()
-        val app = telefono.buscarApp(nombre) ?: return RespuestaAccion("No encuentro ninguna app llamada $nombre.")
+        val app = telefono.buscarApp(nombre) ?: return RespuestaAccion("No encuentro ninguna app llamada ${capitalizar(nombre)}.")
         if (!telefono.puedeAbrirPantallas(appVisible)) return RespuestaAccion(SIN_PERMISO_PANTALLAS)
         if (!telefono.abrirApp(app)) return RespuestaAccion("No he podido abrir ${app.nombre}.")
         return RespuestaAccion(
@@ -200,6 +195,9 @@ class GestorAcciones(private val context: Context) {
     }
 
     companion object {
+        /** Lo reconocido está en minúsculas y sin tildes: al menos, nombres con mayúscula. */
+        private fun capitalizar(texto: String) = texto.split(' ').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
+
         private const val SIN_PERMISO_PANTALLAS =
             "Para hacerlo con la app cerrada necesito el permiso «Mostrar sobre otras apps». Actívalo en Ajustes."
 
