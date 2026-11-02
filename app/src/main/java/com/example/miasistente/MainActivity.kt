@@ -88,7 +88,6 @@ class MainActivity : ComponentActivity() {
                             viewModel.pedirResumen()
                         },
                         alCambiarModoReloj = ::cambiarModoReloj,
-                        alCambiarLeerMensajes = viewModel::activarLeerMensajes,
                         alPermitirLlamadas = {
                             pedirPermisos.launch(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_CONTACTS))
                         },

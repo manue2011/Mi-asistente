@@ -54,7 +54,6 @@ fun PanelAjustes(
     alCambiarHora: (LocalTime) -> Unit,
     alEscucharResumen: () -> Unit,
     alCambiarModoReloj: (Boolean) -> Unit,
-    alCambiarLeerMensajes: (Boolean) -> Unit,
     alPermitirLlamadas: () -> Unit,
     alPermitirPantallas: () -> Unit,
 ) {
@@ -88,13 +87,6 @@ fun PanelAjustes(
                 concedido = ajustes.accesoNotificaciones,
                 textoBoton = "Activar",
                 alPulsar = alActivarNotificaciones,
-            )
-            HorizontalDivider(color = separador)
-            FilaInterruptor(
-                titulo = "Leer mensajes al llegar",
-                descripcion = "Te leo cada WhatsApp o Telegram nuevo y te pregunto si quieres responder",
-                activo = ajustes.leerMensajes,
-                alCambiar = alCambiarLeerMensajes,
             )
             HorizontalDivider(color = separador)
             FilaPermiso(

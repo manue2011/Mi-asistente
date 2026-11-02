@@ -4,8 +4,6 @@ import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
 import android.service.notification.NotificationListenerService
-import android.util.Log
-import com.example.miasistente.MiAsistenteApp
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -17,52 +15,9 @@ import androidx.core.app.NotificationManagerCompat
  */
 class OyenteNotificaciones : NotificationListenerService() {
 
-    /** Último mensaje ya anunciado de cada notificación, para no repetir los que se vuelven a publicar. */
-    private val anunciados = mutableMapOf<String, Long>()
-
     override fun onListenerConnected() {
         instancia = this
-        // Lo que ya estaba en la barra al conectarse no es nuevo: no se anuncia.
-        runCatching { activeNotifications }.getOrNull().orEmpty().forEach { sbn ->
-            ultimoMensaje(sbn)?.let { anunciados[sbn.key] = it.timestamp }
-        }
     }
-
-    override fun onNotificationPosted(sbn: StatusBarNotification) {
-        // Diagnóstico: solo se registra el motivo, nunca el contenido del mensaje.
-        fun descartar(motivo: String) {
-            Log.d(TAG, "${sbn.packageName}: no se lee ($motivo)")
-        }
-
-        // Si Android ha reiniciado la app en segundo plano, el asistente aún no existe: se crea
-        // (y él vuelve a activar la lectura) solo si el usuario la tiene activada.
-        if (alLlegarMensaje == null && getSharedPreferences("asistente", MODE_PRIVATE).getBoolean("leer_mensajes", false)) {
-            (application as MiAsistenteApp).asistente
-        }
-
-        val aviso = alLlegarMensaje ?: return descartar("lectura desactivada")
-        if (sbn.packageName == packageName) return
-        if (sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return descartar("resumen de grupo")
-        // Respeta el modo No molestar.
-        if (currentInterruptionFilter > INTERRUPTION_FILTER_ALL) return descartar("no molestar")
-
-        val chat = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(sbn.notification)
-            ?: return descartar("no es un chat")
-        val ultimo = chat.messages.lastOrNull() ?: return descartar("sin mensajes")
-        // Sin remitente = mensaje enviado por el propio usuario.
-        val remitente = ultimo.person?.name ?: return descartar("mensaje propio")
-        if ((anunciados[sbn.key] ?: Long.MIN_VALUE) >= ultimo.timestamp) return descartar("ya leído")
-        if (System.currentTimeMillis() - ultimo.timestamp > ANTIGUEDAD_MAXIMA_MS) return descartar("antiguo")
-        anunciados[sbn.key] = ultimo.timestamp
-        Log.d(TAG, "${sbn.packageName}: se lee el mensaje")
-
-        val app = nombreApp(this, sbn.packageName)
-        val grupo = chat.conversationTitle?.takeIf { chat.isGroupConversation }?.let { " en el grupo $it" }.orEmpty()
-        aviso("Mensaje de $app de $remitente$grupo: «${limpiar(ultimo.text)}».")
-    }
-
-    private fun ultimoMensaje(sbn: StatusBarNotification) =
-        NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(sbn.notification)?.messages?.lastOrNull()
 
     override fun onListenerDisconnected() {
         if (instancia === this) instancia = null
@@ -77,12 +32,8 @@ class OyenteNotificaciones : NotificationListenerService() {
         @Volatile
         private var instancia: OyenteNotificaciones? = null
 
-        /** Si no es null, se llama con el texto a leer cada vez que llega un mensaje nuevo. */
-        @Volatile
-        var alLlegarMensaje: ((String) -> Unit)? = null
-
-        private const val TAG = "OyenteNotificaciones"
-        private const val ANTIGUEDAD_MAXIMA_MS = 2 * 60 * 1000L
+        /** Encabezado del bloque de notificaciones que se pasa al modelo. */
+        const val ENCABEZADO = "Notificaciones pendientes"
         private const val MAX_NOTIFICACIONES = 15
         private const val MAX_CARACTERES = 160
 
@@ -134,7 +85,7 @@ class OyenteNotificaciones : NotificationListenerService() {
             return if (pendientes.isEmpty()) {
                 "Notificaciones: no hay notificaciones pendientes."
             } else {
-                "Notificaciones pendientes (${pendientes.size}):\n" + pendientes.joinToString("\n") +
+                "$ENCABEZADO (${pendientes.size}):\n" + pendientes.joinToString("\n") +
                     "\nAl hablar de cada notificación di siempre de qué app es y quién la envía, y lee el " +
                     "mensaje tal cual, por ejemplo: «Tienes un mensaje de WhatsApp de Ana que dice: …»."
             }

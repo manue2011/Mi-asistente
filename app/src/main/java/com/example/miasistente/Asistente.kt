@@ -3,11 +3,8 @@ package com.example.miasistente
 import android.Manifest
 import android.app.Application
 import android.content.pm.PackageManager
-import android.content.Context
 import android.net.Uri
 import android.provider.Settings
-import android.util.Log
-import androidx.core.content.edit
 import androidx.core.content.ContextCompat
 import com.example.miasistente.cerebro.ArchivoModelo
 import com.example.miasistente.cerebro.Cerebro
@@ -63,7 +60,6 @@ data class EstadoAjustes(
     val resumenActivo: Boolean = false,
     val horaResumen: LocalTime = LocalTime.of(8, 0),
     val modoReloj: Boolean = false,
-    val leerMensajes: Boolean = false,
     val permisoLlamadas: Boolean = false,
     val permisoPantallas: Boolean = false,
 )
@@ -86,7 +82,6 @@ class Asistente(private val app: Application) {
     private val locutor: Locutor = LocutorTts(app)
     private val contexto = GestorContexto(app)
     private val acciones = GestorAcciones(app)
-    private val prefs = app.getSharedPreferences("asistente", Context.MODE_PRIVATE)
     private val resumenMatutino = ResumenMatutino(app)
 
     private val _ajustes = MutableStateFlow(EstadoAjustes())
@@ -118,7 +113,6 @@ class Asistente(private val app: Application) {
         alcance.launch { cerebro.estado.collect(::alCambiarCerebro) }
         alcance.launch { locutor.hablando.collect(::alCambiarHabla) }
         alcance.launch { locutor.error.collect { e -> if (e != null) avisar(e) } }
-        if (leerMensajes) OyenteNotificaciones.alLlegarMensaje = ::anunciarMensaje
         cargarModelo()
     }
 
@@ -130,7 +124,6 @@ class Asistente(private val app: Application) {
             resumenActivo = resumenMatutino.activo,
             horaResumen = resumenMatutino.hora,
             modoReloj = ServicioReloj.activo(app),
-            leerMensajes = leerMensajes,
             permisoLlamadas = tiene(Manifest.permission.CALL_PHONE) && tiene(Manifest.permission.READ_CONTACTS),
             permisoPantallas = Settings.canDrawOverlays(app),
         )
@@ -139,40 +132,8 @@ class Asistente(private val app: Application) {
     private fun tiene(permiso: String) =
         ContextCompat.checkSelfPermission(app, permiso) == PackageManager.PERMISSION_GRANTED
 
-    /** Leer en voz alta los mensajes (WhatsApp, Telegram…) en cuanto llegan. */
-    private var leerMensajes: Boolean
-        get() = prefs.getBoolean("leer_mensajes", false)
-        set(valor) {
-            prefs.edit { putBoolean("leer_mensajes", valor) }
-            OyenteNotificaciones.alLlegarMensaje = if (valor) ::anunciarMensaje else null
-        }
-
-    fun activarLeerMensajes(activo: Boolean) {
-        leerMensajes = activo
-        refrescarAjustes()
-    }
-
     /** Lo actualiza la pantalla: con ella delante se pueden abrir otras apps sin permisos extra. */
     var pantallaVisible = false
-
-    /**
-     * Lee un mensaje recién llegado. Si se puede usar el micrófono (pantalla delante o modo
-     * reloj), pregunta si quieres responder y escucha: basta con decir "respóndele que…".
-     */
-    private fun anunciarMensaje(texto: String) {
-        if (_ui.value.fase != Fase.INACTIVO) {
-            Log.d("Asistente", "Mensaje no leído: el asistente está en ${_ui.value.fase}")
-            return
-        }
-        val puedeEscuchar = pantallaVisible || ServicioReloj.activo(app)
-        val aviso = if (puedeEscuchar) "$texto ¿Quieres responder?" else texto
-        _ui.update {
-            it.copy(fase = Fase.PENSANDO, mensajes = it.mensajes + MensajeChat(siguienteId++, Rol.ASISTENTE, aviso))
-        }
-        historial += Turno(Rol.ASISTENTE, aviso)
-        escucharAlTerminar = puedeEscuchar
-        locutor.decir(aviso)
-    }
 
     fun activarResumen(activo: Boolean) {
         resumenMatutino.activo = activo
@@ -322,6 +283,7 @@ class Asistente(private val app: Application) {
                 historial += Turno(Rol.USUARIO, mensaje)
                 historial += Turno(Rol.ASISTENTE, final)
                 if (final.isEmpty()) actualizarMensaje(idRespuesta, "…")
+                ofrecerResponder(mensaje, idRespuesta, final)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -341,6 +303,21 @@ class Asistente(private val app: Application) {
                 }
             }
         }
+    }
+
+    /**
+     * Si se acaban de leer mensajes (al preguntar o en el resumen) y alguno se puede contestar,
+     * pregunta si quieres responder y escucha, también con el móvil bloqueado en modo reloj.
+     */
+    private fun ofrecerResponder(mensajeEnviado: String, idRespuesta: Long, respuesta: String) {
+        if (OyenteNotificaciones.ENCABEZADO !in mensajeEnviado) return
+        if (!pantallaVisible && !ServicioReloj.activo(app)) return
+        if (OyenteNotificaciones.chatsRespondibles(app).isEmpty()) return
+        val pregunta = "¿Quieres responder a alguno?"
+        actualizarMensaje(idRespuesta, "$respuesta $pregunta")
+        historial[historial.lastIndex] = Turno(Rol.ASISTENTE, "$respuesta $pregunta")
+        escucharAlTerminar = true
+        locutor.decir(pregunta)
     }
 
     /** Contesta sin pasar por el modelo (resultado de una acción). */

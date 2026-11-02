@@ -75,7 +75,17 @@ class GestorAcciones(private val context: Context) {
         if (!OyenteNotificaciones.tieneAcceso(context)) {
             return RespuestaAccion("Para responder mensajes necesito acceso a las notificaciones. Actívalo en Ajustes.")
         }
-        val chat = elegirChat(OyenteNotificaciones.chatsRespondibles(context), destinatario)
+        val chats = OyenteNotificaciones.chatsRespondibles(context)
+        // "Respóndele que voy" con varios chats pendientes: mejor preguntar que adivinar.
+        if (destinatario.isEmpty() && chats.size > 1) {
+            val nombres = chats.take(4).map { it.nombre }
+            val lista = if (nombres.size == 1) nombres[0] else nombres.dropLast(1).joinToString(", ") + " y " + nombres.last()
+            return RespuestaAccion(
+                "¿A quién? Tienes mensajes de $lista. Dime, por ejemplo: respóndele a ${nombres[0]} que $mensaje.",
+                escucharDespues = true,
+            )
+        }
+        val chat = elegirChat(chats, destinatario)
             ?: return RespuestaAccion(
                 if (destinatario.isEmpty() || destinatario in ULTIMO) {
                     "No veo ningún mensaje pendiente al que pueda responder."
