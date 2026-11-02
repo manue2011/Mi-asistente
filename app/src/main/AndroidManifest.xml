@@ -7,6 +7,12 @@
     <!-- Opcionales; se piden solo al activar cada función en Ajustes. -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <!-- Acciones: llamar a tus contactos, poner alarmas y temporizadores, abrir apps con la app cerrada. -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Para volver a programar el resumen matutino tras reiniciar el móvil. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Modo reloj: servicio en primer plano que escucha al pulsar el botón de música del reloj. -->

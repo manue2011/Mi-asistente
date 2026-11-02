@@ -3,7 +3,10 @@ package com.example.miasistente
 import android.Manifest
 import android.app.Application
 import android.content.pm.PackageManager
+import android.content.Context
 import android.net.Uri
+import android.provider.Settings
+import androidx.core.content.edit
 import androidx.core.content.ContextCompat
 import com.example.miasistente.cerebro.ArchivoModelo
 import com.example.miasistente.cerebro.Cerebro
@@ -59,6 +62,9 @@ data class EstadoAjustes(
     val resumenActivo: Boolean = false,
     val horaResumen: LocalTime = LocalTime.of(8, 0),
     val modoReloj: Boolean = false,
+    val leerMensajes: Boolean = false,
+    val permisoLlamadas: Boolean = false,
+    val permisoPantallas: Boolean = false,
 )
 
 /**
@@ -79,6 +85,7 @@ class Asistente(private val app: Application) {
     private val locutor: Locutor = LocutorTts(app)
     private val contexto = GestorContexto(app)
     private val acciones = GestorAcciones(app)
+    private val prefs = app.getSharedPreferences("asistente", Context.MODE_PRIVATE)
     private val resumenMatutino = ResumenMatutino(app)
 
     private val _ajustes = MutableStateFlow(EstadoAjustes())
@@ -110,6 +117,7 @@ class Asistente(private val app: Application) {
         alcance.launch { cerebro.estado.collect(::alCambiarCerebro) }
         alcance.launch { locutor.hablando.collect(::alCambiarHabla) }
         alcance.launch { locutor.error.collect { e -> if (e != null) avisar(e) } }
+        if (leerMensajes) OyenteNotificaciones.alLlegarMensaje = ::anunciarMensaje
         cargarModelo()
     }
 
@@ -117,11 +125,49 @@ class Asistente(private val app: Application) {
     fun refrescarAjustes() {
         _ajustes.value = EstadoAjustes(
             accesoNotificaciones = OyenteNotificaciones.tieneAcceso(app),
-            permisoCalendario = LectorCalendario(app).tienePermiso,
+            permisoCalendario = LectorCalendario(app).tienePermiso && tiene(Manifest.permission.WRITE_CALENDAR),
             resumenActivo = resumenMatutino.activo,
             horaResumen = resumenMatutino.hora,
             modoReloj = ServicioReloj.activo(app),
+            leerMensajes = leerMensajes,
+            permisoLlamadas = tiene(Manifest.permission.CALL_PHONE) && tiene(Manifest.permission.READ_CONTACTS),
+            permisoPantallas = Settings.canDrawOverlays(app),
         )
+    }
+
+    private fun tiene(permiso: String) =
+        ContextCompat.checkSelfPermission(app, permiso) == PackageManager.PERMISSION_GRANTED
+
+    /** Leer en voz alta los mensajes (WhatsApp, Telegram…) en cuanto llegan. */
+    private var leerMensajes: Boolean
+        get() = prefs.getBoolean("leer_mensajes", false)
+        set(valor) {
+            prefs.edit { putBoolean("leer_mensajes", valor) }
+            OyenteNotificaciones.alLlegarMensaje = if (valor) ::anunciarMensaje else null
+        }
+
+    fun activarLeerMensajes(activo: Boolean) {
+        leerMensajes = activo
+        refrescarAjustes()
+    }
+
+    /** Lo actualiza la pantalla: con ella delante se pueden abrir otras apps sin permisos extra. */
+    var pantallaVisible = false
+
+    /**
+     * Lee un mensaje recién llegado. Si se puede usar el micrófono (pantalla delante o modo
+     * reloj), pregunta si quieres responder y escucha: basta con decir "respóndele que…".
+     */
+    private fun anunciarMensaje(texto: String) {
+        if (_ui.value.fase != Fase.INACTIVO) return
+        val puedeEscuchar = pantallaVisible || ServicioReloj.activo(app)
+        val aviso = if (puedeEscuchar) "$texto ¿Quieres responder?" else texto
+        _ui.update {
+            it.copy(fase = Fase.PENSANDO, mensajes = it.mensajes + MensajeChat(siguienteId++, Rol.ASISTENTE, aviso))
+        }
+        historial += Turno(Rol.ASISTENTE, aviso)
+        escucharAlTerminar = puedeEscuchar
+        locutor.decir(aviso)
     }
 
     fun activarResumen(activo: Boolean) {
@@ -233,7 +279,7 @@ class Asistente(private val app: Application) {
      */
     fun procesar(texto: String, visible: String = texto) {
         // Las acciones (responder mensajes…) se resuelven sin el modelo.
-        acciones.atender(texto)?.let {
+        acciones.atender(texto, pantallaVisible)?.let {
             responderDirecto(visible, it)
             return
         }

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -31,7 +32,8 @@ class MainActivity : ComponentActivity() {
         if (concedido) viewModel.alternar()
     }
 
-    private val pedirCalendario = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+    /** Calendario (leer y apuntar) y llamadas (teléfono y contactos) se piden por parejas. */
+    private val pedirPermisos = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         viewModel.refrescarAjustes()
     }
 
@@ -76,7 +78,9 @@ class MainActivity : ComponentActivity() {
                         ajustes = ajustes,
                         alCerrar = { mostrarAjustes = false },
                         alActivarNotificaciones = ::abrirAccesoNotificaciones,
-                        alPermitirCalendario = { pedirCalendario.launch(Manifest.permission.READ_CALENDAR) },
+                        alPermitirCalendario = {
+                            pedirPermisos.launch(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR))
+                        },
                         alCambiarResumen = ::cambiarResumen,
                         alCambiarHora = viewModel::cambiarHoraResumen,
                         alEscucharResumen = {
@@ -84,6 +88,13 @@ class MainActivity : ComponentActivity() {
                             viewModel.pedirResumen()
                         },
                         alCambiarModoReloj = ::cambiarModoReloj,
+                        alCambiarLeerMensajes = viewModel::activarLeerMensajes,
+                        alPermitirLlamadas = {
+                            pedirPermisos.launch(arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_CONTACTS))
+                        },
+                        alPermitirPantallas = {
+                            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.fromParts("package", packageName, null)))
+                        },
                     )
                 }
             }
@@ -92,7 +103,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        viewModel.pantallaVisible = true
         viewModel.refrescarAjustes()
+    }
+
+    override fun onPause() {
+        viewModel.pantallaVisible = false
+        super.onPause()
     }
 
     override fun onNewIntent(intent: Intent) {

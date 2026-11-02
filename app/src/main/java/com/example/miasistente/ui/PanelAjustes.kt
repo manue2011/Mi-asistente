@@ -1,6 +1,8 @@
 package com.example.miasistente.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -52,8 +54,12 @@ fun PanelAjustes(
     alCambiarHora: (LocalTime) -> Unit,
     alEscucharResumen: () -> Unit,
     alCambiarModoReloj: (Boolean) -> Unit,
+    alCambiarLeerMensajes: (Boolean) -> Unit,
+    alPermitirLlamadas: () -> Unit,
+    alPermitirPantallas: () -> Unit,
 ) {
     var eligiendoHora by remember { mutableStateOf(false) }
+    val separador = Color.White.copy(alpha = 0.08f)
 
     ModalBottomSheet(
         onDismissRequest = alCerrar,
@@ -65,7 +71,8 @@ fun PanelAjustes(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 16.dp)
-                .navigationBarsPadding(),
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState()),
         ) {
             Text("Ajustes", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             Text(
@@ -82,31 +89,45 @@ fun PanelAjustes(
                 textoBoton = "Activar",
                 alPulsar = alActivarNotificaciones,
             )
-            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+            HorizontalDivider(color = separador)
+            FilaInterruptor(
+                titulo = "Leer mensajes al llegar",
+                descripcion = "Te leo cada WhatsApp o Telegram nuevo y te pregunto si quieres responder",
+                activo = ajustes.leerMensajes,
+                alCambiar = alCambiarLeerMensajes,
+            )
+            HorizontalDivider(color = separador)
             FilaPermiso(
-                titulo = "Leer el calendario",
-                descripcion = "Pregúntame \"¿qué tengo hoy?\" o \"¿y mañana?\"",
+                titulo = "Calendario",
+                descripcion = "\"¿Qué tengo hoy?\" o \"apúntame dentista el jueves a las 5\"",
                 concedido = ajustes.permisoCalendario,
                 textoBoton = "Permitir",
                 alPulsar = alPermitirCalendario,
             )
-            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+            HorizontalDivider(color = separador)
+            FilaPermiso(
+                titulo = "Llamadas y contactos",
+                descripcion = "\"Llama a mamá\"",
+                concedido = ajustes.permisoLlamadas,
+                textoBoton = "Permitir",
+                alPulsar = alPermitirLlamadas,
+            )
+            HorizontalDivider(color = separador)
+            FilaPermiso(
+                titulo = "Mostrar sobre otras apps",
+                descripcion = "Para alarmas, temporizadores y abrir apps con el asistente cerrado",
+                concedido = ajustes.permisoPantallas,
+                textoBoton = "Activar",
+                alPulsar = alPermitirPantallas,
+            )
+            HorizontalDivider(color = separador)
 
-            Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Resumen matutino", color = Color.White, fontSize = 16.sp)
-                    Text(
-                        "Cada día a las ${ajustes.horaResumen.format(FORMATO_HORA)} te aviso con tu agenda y notificaciones",
-                        color = Tenue,
-                        fontSize = 12.sp,
-                    )
-                }
-                Switch(
-                    checked = ajustes.resumenActivo,
-                    onCheckedChange = alCambiarResumen,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Celeste),
-                )
-            }
+            FilaInterruptor(
+                titulo = "Resumen matutino",
+                descripcion = "Cada día a las ${ajustes.horaResumen.format(FORMATO_HORA)} te aviso con tu agenda y notificaciones",
+                activo = ajustes.resumenActivo,
+                alCambiar = alCambiarResumen,
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { eligiendoHora = true }) { Text("Cambiar hora", color = Celeste) }
                 Button(
@@ -114,24 +135,15 @@ fun PanelAjustes(
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0D47A1), contentColor = Color.White),
                 ) { Text("Escuchar resumen ahora") }
             }
-            HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(top = 8.dp))
+            HorizontalDivider(color = separador, modifier = Modifier.padding(top = 8.dp))
 
-            Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Modo reloj", color = Color.White, fontSize = 16.sp)
-                    Text(
-                        "Pulsa ▶ en los controles de música del reloj (o de los auriculares) para hablar, " +
-                            "aunque la app esté cerrada. Deja una notificación fija.",
-                        color = Tenue,
-                        fontSize = 12.sp,
-                    )
-                }
-                Switch(
-                    checked = ajustes.modoReloj,
-                    onCheckedChange = alCambiarModoReloj,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Celeste),
-                )
-            }
+            FilaInterruptor(
+                titulo = "Modo reloj",
+                descripcion = "Pulsa ▶ en los controles de música del reloj (o de los auriculares) para hablar, " +
+                    "aunque la app esté cerrada o el móvil bloqueado. Deja una notificación fija.",
+                activo = ajustes.modoReloj,
+                alCambiar = alCambiarModoReloj,
+            )
         }
     }
 
@@ -151,6 +163,21 @@ fun PanelAjustes(
             },
             dismissButton = { TextButton(onClick = { eligiendoHora = false }) { Text("Cancelar") } },
             text = { TimePicker(state = estadoHora) },
+        )
+    }
+}
+
+@Composable
+private fun FilaInterruptor(titulo: String, descripcion: String, activo: Boolean, alCambiar: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(titulo, color = Color.White, fontSize = 16.sp)
+            Text(descripcion, color = Tenue, fontSize = 12.sp)
+        }
+        Switch(
+            checked = activo,
+            onCheckedChange = alCambiar,
+            colors = SwitchDefaults.colors(checkedTrackColor = Celeste),
         )
     }
 }
