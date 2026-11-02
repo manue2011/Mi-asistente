@@ -9,6 +9,10 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Para volver a programar el resumen matutino tras reiniciar el móvil. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Modo reloj: servicio en primer plano que escucha al pulsar el botón de música del reloj. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <!-- Privacidad: se elimina cualquier permiso de red que añada una librería.
          Cuando añadas el modo híbrido con Ollama, quita esta línea y declara INTERNET. -->
@@ -76,6 +80,12 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- Modo reloj (Huawei Watch GT 3 Pro vía control de música). -->
+        <service
+            android:name=".reloj.ServicioReloj"
+            android:exported="false"
+            android:foregroundServiceType="microphone|mediaPlayback" />
 
         <!-- Resumen matutino. -->
         <receiver

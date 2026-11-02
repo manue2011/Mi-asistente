@@ -51,6 +51,7 @@ fun PanelAjustes(
     alCambiarResumen: (Boolean) -> Unit,
     alCambiarHora: (LocalTime) -> Unit,
     alEscucharResumen: () -> Unit,
+    alCambiarModoReloj: (Boolean) -> Unit,
 ) {
     var eligiendoHora by remember { mutableStateOf(false) }
 
@@ -112,6 +113,24 @@ fun PanelAjustes(
                     onClick = alEscucharResumen,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0D47A1), contentColor = Color.White),
                 ) { Text("Escuchar resumen ahora") }
+            }
+            HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(top = 8.dp))
+
+            Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Modo reloj", color = Color.White, fontSize = 16.sp)
+                    Text(
+                        "Pulsa ▶ en los controles de música del reloj (o de los auriculares) para hablar, " +
+                            "aunque la app esté cerrada. Deja una notificación fija.",
+                        color = Tenue,
+                        fontSize = 12.sp,
+                    )
+                }
+                Switch(
+                    checked = ajustes.modoReloj,
+                    onCheckedChange = alCambiarModoReloj,
+                    colors = SwitchDefaults.colors(checkedTrackColor = Celeste),
+                )
             }
         }
     }

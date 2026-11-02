@@ -15,6 +15,7 @@ import com.example.miasistente.contexto.GestorContexto
 import com.example.miasistente.contexto.LectorCalendario
 import com.example.miasistente.contexto.OyenteNotificaciones
 import com.example.miasistente.rutina.ResumenMatutino
+import com.example.miasistente.reloj.ServicioReloj
 import java.time.LocalTime
 import com.example.miasistente.habla.Locutor
 import com.example.miasistente.habla.LocutorTts
@@ -55,6 +56,7 @@ data class EstadoAjustes(
     val permisoCalendario: Boolean = false,
     val resumenActivo: Boolean = false,
     val horaResumen: LocalTime = LocalTime.of(8, 0),
+    val modoReloj: Boolean = false,
 )
 
 /**
@@ -112,6 +114,7 @@ class Asistente(private val app: Application) {
             permisoCalendario = LectorCalendario(app).tienePermiso,
             resumenActivo = resumenMatutino.activo,
             horaResumen = resumenMatutino.hora,
+            modoReloj = ServicioReloj.activo(app),
         )
     }
 
@@ -122,6 +125,11 @@ class Asistente(private val app: Application) {
 
     fun cambiarHoraResumen(hora: LocalTime) {
         resumenMatutino.hora = hora
+        refrescarAjustes()
+    }
+
+    fun activarModoReloj(activo: Boolean) {
+        if (activo) ServicioReloj.iniciar(app) else ServicioReloj.detener(app)
         refrescarAjustes()
     }
 
