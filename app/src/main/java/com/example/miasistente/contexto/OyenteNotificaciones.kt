@@ -62,7 +62,10 @@ class OyenteNotificaciones : NotificationListenerService() {
                 .distinctBy { it.app to it.nombre }
         }
 
-        /** Devuelve las notificaciones pendientes como texto listo para el modelo. */
+        /**
+         * Devuelve las notificaciones pendientes de las apps importantes ([APPS_IMPORTANTES])
+         * como texto listo para el modelo; el resto (promociones, sistema, juegos…) se ignora.
+         */
         fun describir(context: Context): String {
             if (!tieneAcceso(context)) return "Notificaciones: no tengo acceso a las notificaciones."
             val servicio = instancia
@@ -74,7 +77,7 @@ class OyenteNotificaciones : NotificationListenerService() {
             val pendientes = runCatching { servicio.activeNotifications }.getOrNull().orEmpty()
                 .filter { sbn ->
                     val n = sbn.notification
-                    sbn.packageName != context.packageName &&
+                    sbn.packageName in APPS_IMPORTANTES &&
                         !sbn.isOngoing &&
                         n.flags and Notification.FLAG_GROUP_SUMMARY == 0
                 }
@@ -83,7 +86,7 @@ class OyenteNotificaciones : NotificationListenerService() {
                 .mapNotNull { sbn -> describirUna(context, sbn) }
 
             return if (pendientes.isEmpty()) {
-                "Notificaciones: no hay notificaciones pendientes."
+                "Notificaciones: no hay mensajes pendientes de WhatsApp, Gmail, Telegram ni SMS."
             } else {
                 "$ENCABEZADO (${pendientes.size}):\n" + pendientes.joinToString("\n") +
                     "\nAl hablar de cada notificación di siempre de qué app es y quién la envía, y lee el " +
@@ -122,6 +125,16 @@ class OyenteNotificaciones : NotificationListenerService() {
             }.getOrElse { paquete.substringAfterLast('.') }
 
         private const val MAX_MENSAJES_POR_CHAT = 3
+
+        /** Las únicas apps cuyas notificaciones se leen. Añade aquí el paquete de otra app si la quieres. */
+        private val APPS_IMPORTANTES = setOf(
+            "com.whatsapp",
+            "com.whatsapp.w4b",
+            "com.google.android.gm",
+            "org.telegram.messenger",
+            "com.samsung.android.messaging",
+            "com.google.android.apps.messaging",
+        )
 
         /** Nombres tal como se pronuncian, para las apps más habituales. */
         private val NOMBRES_CONOCIDOS = mapOf(

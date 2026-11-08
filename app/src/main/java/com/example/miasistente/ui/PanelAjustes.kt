@@ -116,7 +116,8 @@ fun PanelAjustes(
 
             FilaInterruptor(
                 titulo = "Resumen matutino",
-                descripcion = "Cada día a las ${ajustes.horaResumen.format(FORMATO_HORA)} te aviso con tu agenda y notificaciones",
+                descripcion = "Cada día a las ${ajustes.horaResumen.format(FORMATO_HORA)} te leo tu agenda, notificaciones " +
+                    "y titulares de noticias, aunque el móvil esté bloqueado",
                 activo = ajustes.resumenActivo,
                 alCambiar = alCambiarResumen,
             )

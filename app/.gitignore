@@ -1,1 +1,3 @@
 /build
+# Configuración de Huawei AppGallery Connect: contiene claves, no subir
+agconnect-services.json

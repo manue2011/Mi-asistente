@@ -18,11 +18,13 @@ import java.time.LocalTime
 import java.time.ZonedDateTime
 
 /**
- * Resumen matutino: cada día a la hora elegida aparece una notificación;
- * al tocarla se abre el asistente y lee el resumen (agenda + notificaciones).
+ * Resumen matutino: cada día a la hora elegida el asistente lee en voz alta
+ * la agenda, las notificaciones y los titulares, aunque el móvil esté
+ * bloqueado (lo hace [ServicioResumen]).
  *
- * Android no deja abrir una app sola desde segundo plano, por eso se avisa
- * con una notificación en vez de hablar directamente.
+ * Se usa una alarma exacta porque es lo que permite a Android arrancar un
+ * servicio en primer plano desde segundo plano. Si aun así no se puede,
+ * queda el aviso de siempre: una notificación que al tocarla lo lee.
  */
 class ResumenMatutino(private val context: Context) {
 
@@ -59,8 +61,13 @@ class ResumenMatutino(private val context: Context) {
         val ahora = ZonedDateTime.now()
         var siguiente = ahora.with(hora).withSecond(0).withNano(0)
         if (!siguiente.isAfter(ahora)) siguiente = siguiente.plusDays(1)
-        // Ventana de 5 minutos: no necesita el permiso de alarmas exactas.
-        alarmas.setWindow(AlarmManager.RTC_WAKEUP, siguiente.toInstant().toEpochMilli(), VENTANA_MS, disparo)
+        val momento = siguiente.toInstant().toEpochMilli()
+        if (alarmas.canScheduleExactAlarms()) {
+            alarmas.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, momento, disparo)
+        } else {
+            // Sin alarma exacta Android no deja hablar con el móvil bloqueado: solo se podrá avisar.
+            alarmas.setWindow(AlarmManager.RTC_WAKEUP, momento, VENTANA_MS, disparo)
+        }
     }
 
     fun avisar() {
@@ -102,11 +109,11 @@ class ResumenMatutino(private val context: Context) {
     }
 }
 
-/** Salta con la alarma diaria: avisa y programa la del día siguiente. */
+/** Salta con la alarma diaria: lee el resumen (o avisa) y programa el del día siguiente. */
 class ReceptorResumen : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val resumen = ResumenMatutino(context)
-        resumen.avisar()
+        if (!ServicioResumen.iniciar(context)) resumen.avisar()
         resumen.programar()
     }
 }

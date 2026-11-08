@@ -11,7 +11,7 @@ import kotlinx.coroutines.withContext
  * Localiza el archivo `.litertlm` del modelo en el almacenamiento de la app.
  *
  * Carpeta esperada (accesible por `adb push` sin permisos extra):
- * `/sdcard/Android/data/com.example.miasistente/files/`
+ * `/sdcard/Android/data/com.reyes.miasistente/files/`
  */
 class ArchivoModelo(private val context: Context) {
 

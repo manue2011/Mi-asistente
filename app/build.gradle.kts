@@ -10,7 +10,8 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.miasistente"
+        // Registrado así en AppGallery Connect (Wear Engine); el namespace del código no cambia.
+        applicationId = "com.reyes.miasistente"
         // createOnDeviceSpeechRecognizer requiere Android 12 (API 31).
         minSdk = 31
         targetSdk = 37
